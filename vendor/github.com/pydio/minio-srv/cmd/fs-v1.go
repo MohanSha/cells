@@ -31,9 +31,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"crypto/md5"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/pydio/minio-srv/cmd/logger"
 	"github.com/pydio/minio-srv/pkg/hash"
 	"github.com/pydio/minio-srv/pkg/lock"
@@ -702,23 +702,23 @@ func (fs *FSObjects) computeFsJSONFromChecksum(bucket, object string) (fsMeta fs
 
 	fsMeta = newFSMetaV1()
 	fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fs.metaJSONFile)
-	fsObjPath := pathJoin(fs.fsPath, bucket, object)
-	reader, size, err := fsOpenFile(context.Background(), fsObjPath, 0)
-	if err != nil {
-		return fsMeta, err
-	}
-	defer reader.Close()
-	bufSize := int64(readSizeV1)
-	if size > 0 && bufSize > size {
-		bufSize = size
-	}
-	buf := make([]byte, int(bufSize))
-	md5Writer := md5.New()
-	io.CopyBuffer(md5Writer, reader, buf)
-	mD5Hex := hex.EncodeToString(md5Writer.Sum(nil))
+	// fsObjPath := pathJoin(fs.fsPath, bucket, object)
+	// reader, size, err := fsOpenFile(context.Background(), fsObjPath, 0)
+	// if err != nil {
+	// 	return fsMeta, err
+	// }
+	// defer reader.Close()
+	// bufSize := int64(readSizeV1)
+	// if size > 0 && bufSize > size {
+	// 	bufSize = size
+	// }
+	// buf := make([]byte, int(bufSize))
+	// md5Writer := md5.New()
+	// io.CopyBuffer(md5Writer, reader, buf)
+	// mD5Hex := hex.EncodeToString(md5Writer.Sum(nil))
 
 	fmt.Println("Computing Etag for unknown file : ", object)
-	fsMeta.Meta = map[string]string{"etag": mD5Hex}
+	fsMeta.Meta = map[string]string{"etag": uuid.New().String()}
 	contentType := mimedb.TypeByExtension(path.Ext(object))
 	fsMeta.Meta["content-type"] = contentType
 
@@ -730,7 +730,6 @@ func (fs *FSObjects) computeFsJSONFromChecksum(bucket, object string) (fsMeta fs
 	fsMeta.WriteTo(wlk)
 
 	return fsMeta, nil
-
 }
 
 // getObjectInfo - wrapper for reading object metadata and constructs ObjectInfo.

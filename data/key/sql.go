@@ -37,7 +37,8 @@ import (
 )
 
 var (
-	queries = map[string]interface{}{
+	throttle = make(chan struct{}, 10)
+	queries  = map[string]interface{}{
 		"enc_nodes_select":              `SELECT * FROM enc_nodes WHERE node_id=?;`,
 		"enc_nodes_insert":              `INSERT INTO enc_nodes (node_id,nonce,block_size) VALUES (?,?,?);`,
 		"enc_nodes_update":              `UPDATE enc_nodes SET nonce=?,block_size=? WHERE node_id=?;`,
@@ -124,6 +125,12 @@ func (h *sqlimpl) InsertNode(nodeUuid string, nonce []byte, blockSize int32) err
 }
 
 func (h *sqlimpl) DeleteNode(nodeUuid string) error {
+
+	throttle <- struct{}{}
+	defer func() {
+		<-throttle
+	}()
+
 	stmt := h.GetStmt("enc_nodes_delete")
 	if stmt == nil {
 		return fmt.Errorf("Unknown statement")

@@ -39,6 +39,8 @@ import (
 )
 
 var (
+	count      = 0
+	count2     = 0
 	cache      = make(map[string]DAO)
 	cacheMutex = &sync.Mutex{}
 )
@@ -60,6 +62,9 @@ type daocache struct {
 	insertChan chan *mtree.TreeNode
 	insertDone chan bool
 
+	deleteChan chan *mtree.TreeNode
+	deleteDone chan bool
+
 	errors []error
 
 	current string
@@ -73,6 +78,9 @@ func NewDAOCache(session string, d DAO) DAO {
 	ic, err := d.AddNodeStream(100)
 	id := make(chan bool, 1)
 
+	dc, err := d.DelNodeStream(100)
+	dd := make(chan bool, 1)
+
 	c := &daocache{
 		DAO:        d,
 		session:    session,
@@ -82,6 +90,8 @@ func NewDAOCache(session string, d DAO) DAO {
 		mutex:      &sync.RWMutex{},
 		insertChan: ic,
 		insertDone: id,
+		deleteChan: dc,
+		deleteDone: dd,
 	}
 
 	cacheMutex.Lock()
@@ -93,6 +103,7 @@ func NewDAOCache(session string, d DAO) DAO {
 
 	go func() {
 		defer close(c.insertDone)
+		defer close(c.deleteDone)
 		for e := range err {
 			c.errors = append(c.errors, e)
 		}
@@ -255,9 +266,11 @@ func (d *daocache) Path(strpath string, create bool, reqNode ...*tree.Node) (mtr
 // Flush
 func (d *daocache) Flush(final bool) error {
 	close(d.insertChan)
+	close(d.deleteChan)
 
 	// Waiting for the insertion to be fully done
 	<-d.insertDone
+	<-d.deleteDone
 
 	var err error
 
@@ -299,10 +312,32 @@ func (d *daocache) AddNodeStream(max int) (chan *mtree.TreeNode, chan error) {
 	return c, e
 }
 
+// AddNodeStream should not be used directly with the cache
+func (d *daocache) DelNodeStream(max int) (chan *mtree.TreeNode, chan error) {
+	c := make(chan *mtree.TreeNode)
+	e := make(chan error)
+
+	go func() {
+		defer close(e)
+		for _ = range c {
+			e <- errors.New("DelNodeStream should not be used directly when using the cache")
+		}
+	}()
+
+	return c, e
+}
+
 // AddNode to the cache and prepares it to be added to the database
 func (d *daocache) AddNode(node *mtree.TreeNode) error {
+
+	fmt.Println("Before ", count)
+	count = count + 1
+
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
+
+	fmt.Println("After ", count2)
+	count2 = count2 + 1
 
 	d.insertChan <- node
 
@@ -337,9 +372,7 @@ func (d *daocache) DelNode(node *mtree.TreeNode) error {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
 
-	if err := d.DAO.DelNode(node); err != nil {
-		return err
-	}
+	d.deleteChan <- node
 
 	delete(d.cache, node.MPath.String())
 

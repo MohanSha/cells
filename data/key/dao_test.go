@@ -22,6 +22,7 @@ package key
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/smartystreets/goconvey/convey"
@@ -107,5 +108,23 @@ func TestSqlimpl_DeleteNode(t *testing.T) {
 	convey.Convey("Get node key", t, func() {
 		err := mockDAO.DeleteNode("pydio")
 		convey.So(err, convey.ShouldBeNil)
+	})
+}
+
+func TestSqlThrottle_DeleteNode(t *testing.T) {
+	convey.Convey("Delete node", t, func(c convey.C) {
+		wg := &sync.WaitGroup{}
+		for i := 1; i <= 100; i++ {
+			wg.Add(1)
+			go func() {
+				err := mockDAO.DeleteNode("pydio")
+				c.So(err, convey.ShouldBeNil)
+
+				wg.Done()
+			}()
+		}
+
+		wg.Wait()
+
 	})
 }

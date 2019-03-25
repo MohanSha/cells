@@ -168,23 +168,41 @@ func init() {
 	}
 
 	queries["deleteTree"] = func(mpathes ...string) (string, []interface{}) {
-		sub, args := getMPathEqualsOrLike("", []byte(mpathes[0]))
+		sub := []string{}
+		args := []interface{}{}
+
+		for _, mpath := range mpathes {
+			newSub, newArgs := getMPathEqualsOrLike("", []byte(mpath))
+
+			sub = append(sub, "("+newSub+")")
+			args = append(args, newArgs...)
+		}
 
 		return fmt.Sprintf(`
 			delete from %%PREFIX%%_idx_tree
-			where (%s)`, sub), args
+			where (%s)`, strings.Join(sub, " or ")), args
 	}
 
 	queries["deleteNode"] = func(mpathes ...string) (string, []interface{}) {
-		sub, args := getMPathEqualsOrLike("", []byte(mpathes[0]))
+
+		sub := []string{}
+		args := []interface{}{}
+
+		for _, mpath := range mpathes {
+			newSub, newArgs := getMPathEqualsOrLike("", []byte(mpath))
+
+			sub = append(sub, "("+newSub+")")
+			args = append(args, newArgs...)
+		}
 
 		return fmt.Sprintf(`
-		delete from %%PREFIX%%_idx_nodes
-		where uuid in (
-			select uuid
-			from %%PREFIX%%_idx_tree
-			where (%s)
-		)`, sub), args
+			delete from %%PREFIX%%_idx_nodes
+			where uuid in (
+				select uuid
+				from %%PREFIX%%_idx_tree
+				where %s
+			)
+		`, strings.Join(sub, " or ")), args
 	}
 
 	queries["selectNode"] = func(mpathes ...string) (string, []interface{}) {
@@ -904,6 +922,87 @@ func (dao *IndexSQL) SetNodes(etag string, deltaSize int64) sql.BatchSender {
 	}()
 
 	return b
+}
+
+// DelNodeStream from database
+func (dao *IndexSQL) DelNodeStream(max int) (chan *mtree.TreeNode, chan error) {
+
+	c := make(chan *mtree.TreeNode)
+	e := make(chan error)
+
+	go func() {
+
+		defer close(e)
+
+		delete := func(mpathes []interface{}) error {
+
+			dao.Lock()
+			defer dao.Unlock()
+
+			db := dao.DB()
+
+			var err error
+
+			tx, err := db.BeginTx(context.Background(), nil)
+			if err != nil {
+				return err
+			}
+
+			defer func() {
+				if err != nil {
+					tx.Rollback()
+				} else {
+					tx.Commit()
+				}
+			}()
+
+			if stmt, args := dao.GetStmtWithArgs("deleteNode", mpathes...); stmt != nil {
+				if _, err = stmt.Exec(args...); err != nil {
+					return err
+				}
+			} else {
+				return fmt.Errorf("Empty statement")
+			}
+
+			if stmt, args := dao.GetStmtWithArgs("deleteTree", mpathes...); stmt != nil {
+				if _, err = stmt.Exec(args...); err != nil {
+					return err
+				}
+			} else {
+				return fmt.Errorf("Empty statement")
+			}
+
+			return nil
+		}
+
+		mpathes := []interface{}{}
+
+		var count int
+		for node := range c {
+			mpathes = append(mpathes, node.MPath)
+
+			count = count + 1
+
+			if count >= max {
+
+				if err := delete(mpathes); err != nil {
+					e <- err
+				}
+
+				count = 0
+				mpathes = []interface{}{}
+			}
+		}
+
+		if count > 0 {
+			if err := delete(mpathes); err != nil {
+				e <- err
+			}
+		}
+
+	}()
+
+	return c, e
 }
 
 // DelNode from database

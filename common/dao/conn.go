@@ -27,7 +27,6 @@ import (
 
 	"time"
 
-	"github.com/pydio/cells/common"
 	"github.com/pydio/cells/common/service/metrics"
 )
 
@@ -122,9 +121,9 @@ func getSqlConnection(driver string, dsn string) (*sql.DB, error) {
 		if err := db.Ping(); err != nil {
 			return nil, err
 		}
-		db.SetMaxOpenConns(common.DB_MAX_OPEN_CONNS)
-		db.SetConnMaxLifetime(common.DB_CONN_MAX_LIFETIME)
-		db.SetMaxIdleConns(common.DB_MAX_IDLE_CONNS)
+		// db.SetMaxOpenConns(common.DB_MAX_OPEN_CONNS)
+		// db.SetConnMaxLifetime(common.DB_CONN_MAX_LIFETIME)
+		// db.SetMaxIdleConns(common.DB_MAX_IDLE_CONNS)
 		computeStats(db)
 		return db, nil
 	}

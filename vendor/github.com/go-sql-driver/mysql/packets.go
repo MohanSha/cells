@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"runtime/debug"
 	"time"
 )
 
@@ -33,6 +34,7 @@ func (mc *mysqlConn) readPacket() ([]byte, error) {
 			if cerr := mc.canceled.Value(); cerr != nil {
 				return nil, cerr
 			}
+			debug.PrintStack()
 			errLog.Print(err)
 			mc.Close()
 			return nil, ErrInvalidConn

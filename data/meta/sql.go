@@ -34,7 +34,8 @@ import (
 )
 
 var (
-	queries = map[string]string{
+	throttle = make(chan struct{}, 10)
+	queries  = map[string]string{
 		"upsert":     `INSERT INTO data_meta (node_id,namespace,data,author,timestamp,format) VALUES (?,?,?,?,?,?) ON DUPLICATE KEY UPDATE data=?,author=?,timestamp=?,format=?`,
 		"deleteNS":   `DELETE FROM data_meta WHERE namespace=?`,
 		"deleteUuid": `DELETE FROM data_meta WHERE node_id=?`,
@@ -80,6 +81,11 @@ func (s *sqlimpl) Init(options common.ConfigValues) error {
 }
 
 func (h *sqlimpl) SetMetadata(nodeId string, author string, metadata map[string]string) (err error) {
+
+	throttle <- struct{}{}
+	defer func() {
+		<-throttle
+	}()
 
 	if len(metadata) == 0 {
 		// Delete all metadata for node

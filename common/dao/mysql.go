@@ -25,6 +25,7 @@ import (
 	"fmt"
 
 	mysqltools "github.com/go-sql-driver/mysql"
+	"github.com/pydio/cells/common"
 )
 
 type mysql struct {
@@ -56,6 +57,23 @@ func (m *mysql) Open(dsn string) (Conn, error) {
 	if db, err = getSqlConnection("mysql", dsn); err != nil {
 		return nil, err
 	}
+
+	var maxConnections int
+	if err := db.QueryRow(`select @@max_connections as max_connections`).Scan(&maxConnections); err != nil {
+		return nil, err
+	}
+
+	maxIdleConnections := common.DB_MAX_IDLE_CONNS
+	if maxIdleConnections > maxConnections/2 {
+		maxIdleConnections = maxConnections / 2
+		maxConnections = maxConnections / 2
+	} else {
+		maxConnections = maxConnections - maxIdleConnections
+	}
+
+	db.SetMaxOpenConns(maxConnections)
+	db.SetConnMaxLifetime(common.DB_CONN_MAX_LIFETIME)
+	db.SetMaxIdleConns(maxIdleConnections)
 
 	m.conn = db
 

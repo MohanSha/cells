@@ -620,6 +620,42 @@ func TestStreamsWithCache(t *testing.T) {
 		So(err, ShouldBeNil)
 		So(idx, ShouldEqual, 1)
 	})
+
+	Convey("Re-deleting a file - Success", t, func() {
+		newSession()
+
+		c, e := getDAO(ctxWithCache).DelNodeStream(5)
+
+		errorCount := 0
+		wg := &sync.WaitGroup{}
+		go func() {
+			wg.Add(1)
+			defer wg.Done()
+			for _ = range e {
+				errorCount = errorCount + 1
+			}
+		}()
+
+		for i := 1; i <= 1152; i++ {
+			node := mtree.NewTreeNode()
+			node.Node = &tree.Node{Uuid: "testing-stream" + strconv.Itoa(i), Type: tree.NodeType_LEAF}
+			node.SetMPath(1, 17, uint64(i))
+
+			c <- node
+		}
+
+		close(c)
+
+		getDAO(ctxWithCache).Flush(true)
+
+		wg.Wait()
+
+		So(errorCount, ShouldEqual, 1152)
+
+		idx, err := getDAO(ctxWithCache).GetNodeFirstAvailableChildIndex(mtree.NewMPath(1, 17))
+		So(err, ShouldBeNil)
+		So(idx, ShouldEqual, 1)
+	})
 }
 
 func TestArborescenceWithCache(t *testing.T) {

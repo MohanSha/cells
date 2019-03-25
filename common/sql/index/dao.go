@@ -37,8 +37,9 @@ type DAO interface {
 	SetNode(*mtree.TreeNode) error
 	DelNode(*mtree.TreeNode) error
 
-	// Simple Add / Set / Delete
+	// Stream Add / Set / Delete
 	AddNodeStream(int) (chan *mtree.TreeNode, chan error)
+	DelNodeStream(int) (chan *mtree.TreeNode, chan error)
 	Flush(bool) error
 
 	// Batch Add / Set / Delete
